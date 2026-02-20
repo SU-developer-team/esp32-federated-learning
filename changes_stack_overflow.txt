@@ -1,0 +1,23 @@
+STACK OVERFLOW FIXES (summary)
+
+1) platformio.ini
+- Added build_flags with CONFIG_ARDUINO_LOOP_STACK_SIZE=32768.
+  Purpose: increase Arduino loopTask stack size to reduce stack overflow risk.
+
+2) src/trening/trening.cpp
+- Added FreeRTOS headers (FreeRTOS.h/task.h).
+  Purpose: allow creating a dedicated training task.
+- Added TRAIN_TASK_STACK_WORDS/PRIORITY/CORE; set stack to 32768 words (~128 KB).
+  Purpose: give training a much larger stack than loopTask.
+- Moved the training flow into training_task() and launch it from setup()
+  using xTaskCreatePinnedToCore.
+  Purpose: keep heavy training work off loopTask to avoid its stack limit.
+- Added global reusable buffers/tensors (g_x1/g_outK/g_y1 and related tensors).
+  Purpose: avoid large local arrays on the task stack during train/eval.
+- Updated eval_acc_indices, eval_acc_plain, train_epochs to use those
+  global buffers/tensors.
+
+Notes
+- TRAIN_TASK_STACK_WORDS is in 32-bit words, so 32768 ~= 128 KB stack.
+- If stack overflow still occurs, increase TRAIN_TASK_STACK_WORDS further
+  or move the task stack to PSRAM.
