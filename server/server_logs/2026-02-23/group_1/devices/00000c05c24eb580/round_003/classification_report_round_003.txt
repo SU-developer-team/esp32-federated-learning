@@ -1,0 +1,22 @@
+                          precision    recall  f1-score   support
+
+                  Benign     0.9204    0.8320    0.8739       125
+                 No DDoS     0.8091    0.7120    0.7574       125
+         DDoS icmp flood     1.0000    0.9920    0.9960       125
+          DDoS UDP flood     0.9615    1.0000    0.9804       125
+          DDoS TCP flood     0.9191    1.0000    0.9579       125
+             DDoS PSHACK     1.0000    1.0000    1.0000       125
+          DDoS Syn flood     0.5938    0.4560    0.5158       125
+       DDoS RSTFIN flood     1.0000    0.9920    0.9960       125
+DDoS Synonymous ip flood     0.5706    0.7760    0.6576       125
+ DDoS ICMP fragmentation     1.0000    0.9920    0.9960       125
+  DDoS UDP fragmentation     1.0000    0.9760    0.9879       125
+  DDoS ACK Fragmentation     1.0000    0.9840    0.9919       125
+                   Mirai     1.0000    0.9840    0.9919       125
+                    MITM     0.7984    0.8240    0.8110       125
+          Reconnaissance     0.6296    0.5440    0.5837       125
+      Vulnerability scan     0.6364    0.7280    0.6791       125
+
+                accuracy                         0.8620      2000
+               macro avg     0.8649    0.8620    0.8610      2000
+            weighted avg     0.8649    0.8620    0.8610      2000

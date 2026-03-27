@@ -1,0 +1,17 @@
+{
+  "ts": "2026-02-23 13:52:42",
+  "level": "TX",
+  "msg": "pending_push sent",
+  "extra": {
+    "type": "pending_push",
+    "agg_round_id": 4,
+    "day": "2026-02-23",
+    "group_id": "group_1",
+    "round_no": 4,
+    "participants": [
+      "00000c05c24eb580",
+      "00006c03a2453ab4",
+      "0000ecf4a1453ab4"
+    ]
+  }
+}

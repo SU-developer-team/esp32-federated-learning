@@ -1,0 +1,9 @@
+# Core numeric and crypto dependencies used by the server scripts
+numpy>=1.24
+cryptography>=42.0
+paho-mqtt>=1.6
+
+# Analysis and plotting
+matplotlib>=3.7
+pandas>=2.0
+scikit-learn>=1.3

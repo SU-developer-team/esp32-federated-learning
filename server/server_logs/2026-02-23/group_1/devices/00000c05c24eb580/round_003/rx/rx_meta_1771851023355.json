@@ -1,0 +1,16 @@
+{
+  "type": "AIF2",
+  "ok": true,
+  "epoch": 1,
+  "sid": "5c48b87cbff0c002",
+  "addr": "192.168.4.124:60988",
+  "agg_round_id": 3,
+  "cipher_len": 353952,
+  "plain_len": 353952,
+  "weights_len": 37312,
+  "metrics_len": 316592,
+  "weights_sha256": "a477f4c8b463ed3a09d18a753631ee626dc707c366df24e09fcbe416390dffd8",
+  "hash_ok": true,
+  "dec_ms": 2094.506,
+  "proc_ms": 2096.18
+}

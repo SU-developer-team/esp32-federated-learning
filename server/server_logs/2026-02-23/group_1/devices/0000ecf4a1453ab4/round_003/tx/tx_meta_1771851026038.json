@@ -1,0 +1,18 @@
+{
+  "type": "AIF1",
+  "epoch": 1,
+  "sid": "ebd733ca0419252e",
+  "addr": "192.168.4.114:56311",
+  "agg_round_id": 3,
+  "group_id": "group_1",
+  "group_round_no": 3,
+  "participants": [
+    "00000c05c24eb580",
+    "00006c03a2453ab4",
+    "0000ecf4a1453ab4"
+  ],
+  "agg_weights_len": 37312,
+  "agg_weights_sha256": "576ba8e7c46fb72c0c247c9769a5bc218f86244a6f0db6be446466689eda5253",
+  "plain_len": 37352,
+  "cipher_len": 37352
+}

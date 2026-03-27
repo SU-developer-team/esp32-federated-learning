@@ -1,0 +1,23 @@
+{
+  "ts": "2026-02-23 14:54:57",
+  "level": "TX",
+  "msg": "AIF1 sent agg_round_id=5",
+  "extra": {
+    "type": "AIF1",
+    "epoch": 1,
+    "sid": "5c48b87cbff0c002",
+    "addr": "192.168.4.124:60988",
+    "agg_round_id": 5,
+    "group_id": "group_1",
+    "group_round_no": 5,
+    "participants": [
+      "00000c05c24eb580",
+      "00006c03a2453ab4",
+      "0000ecf4a1453ab4"
+    ],
+    "agg_weights_len": 37312,
+    "agg_weights_sha256": "17ab47586d8f2e05eeaa3f7371c968d7346c256c581e453d7b5cd700a7fd1dca",
+    "plain_len": 37352,
+    "cipher_len": 37352
+  }
+}
