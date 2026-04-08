@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Purpose: run a lightweight aggregation server for RLHABC-style
+encrypted payload processing over TCP.
+
+This script accepts device updates, applies the aggregation rule,
+and returns the transformed result to connected clients.
+"""
+
 # Minimal RLHABC aggregation server (double each block: C + C)
 
 from __future__ import annotations

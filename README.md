@@ -4,8 +4,10 @@ This repository contains ESP32-S3 firmware and Python-side tooling for federated
 
 The project combines:
 - ESP32-S3 client firmware for local training and weight upload
+- ESP32-S3 centralized training firmware for baseline comparison
 - ECDH + PSK authentication and key exchange
 - Python server code for receiving, aggregating, and analyzing model updates
+- LabVIEW measurement assets used during power and energy experiments
 - MQTT demos for `PRESENT`, `SIMON`, and `SPECK`
 - RAM, flash, and speed benchmarks for lightweight ciphers
 
@@ -17,12 +19,14 @@ The project combines:
 - [src](/d:/esp32_federated/src) contains all firmware sources.
 - [lib/auth_ecdh](/d:/esp32_federated/lib/auth_ecdh) contains the local authentication library.
 - [server](/d:/esp32_federated/server) contains the Python server code, metric analysis scripts, and related utilities.
+- [labview](/d:/esp32_federated/labview) contains the LabVIEW project file used to measure power and energy consumption during the experiments.
 - [server/graph](/d:/esp32_federated/server/graph) stores generated experiment graphs, including power and energy plots.
 - [changes_stack_overflow.txt](/d:/esp32_federated/changes_stack_overflow.txt) contains notes about stack overflow fixes and experiments.
 
 ### Firmware in `src`
 - [federated_secure_upload](/d:/esp32_federated/src/federated_secure_upload) is a secure upload client that authenticates, encrypts, and sends weights.
-- [federated_train_device_1](/d:/esp32_federated/src/federated_train_device_1), [federated_train_device_2](/d:/esp32_federated/src/federated_train_device_2), [federated_train_device_3](/d:/esp32_federated/src/federated_train_device_3), and [federated_train_device_4](/d:/esp32_federated/src/federated_train_device_4) are federated learning firmware variants for different devices.
+- [federated_train_device_1](/d:/esp32_federated/src/federated_train_device_1), [federated_train_device_2](/d:/esp32_federated/src/federated_train_device_2), and [federated_train_device_3](/d:/esp32_federated/src/federated_train_device_3) are federated learning firmware variants for different devices.
+- [federated_train_centr](/d:/esp32_federated/src/federated_train_centr) contains the centralized training firmware and datasets used as a single-node baseline for comparison against the federated setup.
 - [auth_ecdh](/d:/esp32_federated/src/auth_ecdh) contains firmware used to test the `auth_ecdh` library.
 - [ecdh_handshake](/d:/esp32_federated/src/ecdh_handshake) contains a manual ECDH handshake implementation.
 - [ecdh_handshake_speed](/d:/esp32_federated/src/ecdh_handshake_speed) measures handshake performance.
@@ -70,7 +74,7 @@ The full list is in [platformio.ini](/d:/esp32_federated/platformio.ini). The mo
 - `federated_train_device_1`
 - `federated_train_device_2`
 - `federated_train_device_3`
-- `federated_train_device_4`
+- `federated_train_centr`
 
 ### Authentication and handshake
 - `auth_ecdh_once`
@@ -121,6 +125,8 @@ pio run -e bench_speed_speck -t upload
 - Some firmware keeps Wi-Fi credentials, server IPs, and keys directly in source files.
 - The training firmware uses embedded datasets stored in header files.
 - The secure upload and federated training flows depend on the Python server code in [server](/d:/esp32_federated/server).
+- The [labview/labview.vi](/d:/esp32_federated/labview/labview.vi) file is the measurement workflow used to capture energy and power consumption during the hardware experiments.
+- A repository scan found no files larger than `150 MB` at the moment.
 
 ## Project Status
 

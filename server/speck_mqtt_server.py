@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Purpose: receive and process MQTT payloads protected with the
+Speck cipher in the ESP32 communication experiments.
+
+This script subscribes to encrypted topics, decrypts payloads,
+parses the message structure, and logs the decoded content.
+"""
+
 # ---------------------------------------------------------
 #  speck_server.py   –   MQTT-сервис для пакетов Speck-64/96
 # ---------------------------------------------------------

@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Purpose: compare saved model weight files produced by the server
+or by training runs and highlight numeric differences.
+
+This utility is used to inspect whether two exported weight sets
+match exactly or diverge after aggregation or training.
+"""
+
 import re
 import numpy as np
 

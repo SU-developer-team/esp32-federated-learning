@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Purpose: run the secure federated learning server that receives
+encrypted client updates, aggregates weights, and stores logs.
+
+This script is the main backend for the ESP32 federated training
+experiment and manages round coordination, parsing, and outputs.
+"""
+
 # ---------------------------------------------------------
 # secure_federated_server.py (HUMAN-READABLE LOGS ONLY)
 #

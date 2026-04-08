@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Purpose: run the TCP server for Speck-encrypted communication
+between ESP32 devices and the host machine.
+
+This script accepts binary TCP payloads, decrypts and parses
+them, and can prepare processed responses for the client side.
+"""
+
 # ---------------------------------------------------------
 # speck_server.py – ОПТИМИЗИРОВАННЫЙ TCP-сервер
 # ---------------------------------------------------------

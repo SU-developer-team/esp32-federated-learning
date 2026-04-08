@@ -1,3 +1,11 @@
+"""
+Purpose: analyze saved federated test metrics and generate
+reports, confusion matrices, and accuracy plots.
+
+This script reads server log artifacts produced during the
+experiment and summarizes model quality across rounds.
+"""
+
 import glob
 import os
 from io import StringIO
