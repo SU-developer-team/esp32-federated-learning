@@ -1,10 +1,17 @@
+/*******************************************************
+ * Purpose: measure RAM usage of the SPECK
+ * implementation on the ESP32 platform.
+ *
+ * This firmware is used for runtime memory benchmarking
+ * of the cipher implementation.
+ *******************************************************/
 #include <Arduino.h>
 
 #define ROTR32(x, r) ((uint32_t)(((x) >> (r)) | ((x) << (32 - (r)))))
 #define ROTL32(x, r) ((uint32_t)(((x) << (r)) | ((x) >> (32 - (r)))))
 
 uint32_t RK[26];
-/* ───────────────────── 1. Key-schedule ───────────────────── */
+/* в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ 1. Key-schedule в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ */
 void genRK96(const uint32_t k[3]) {
     uint32_t l[2];
     uint32_t rk;

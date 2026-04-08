@@ -1,3 +1,10 @@
+/*******************************************************
+ * Purpose: measure flash memory usage of the SPECK
+ * implementation on the ESP32 platform.
+ *
+ * This firmware is used for code-size benchmarking of
+ * the cipher implementation in program memory.
+ *******************************************************/
 #include <Arduino.h>
 #include <cstdint>
 
@@ -6,7 +13,7 @@
 
 uint32_t RK[26];
 uint64_t ctBuf[600];
-/* ───────────────────── 1. Key-schedule ───────────────────── */
+/* в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ 1. Key-schedule в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ */
 void genRK96(const uint32_t k[3]) {
     uint32_t l[2];
     uint32_t rk;

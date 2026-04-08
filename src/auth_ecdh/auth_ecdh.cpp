@@ -1,3 +1,10 @@
+/*******************************************************
+ * Purpose: run a single ECDH-based authentication flow
+ * between the ESP32 device and the server over Wi-Fi.
+ *
+ * This firmware is used to verify session setup,
+ * key derivation, and authenticated TCP connectivity.
+ *******************************************************/
 #include <Arduino.h>
 #include <WiFi.h>
 

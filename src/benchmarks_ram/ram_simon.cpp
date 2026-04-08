@@ -1,25 +1,32 @@
+/*******************************************************
+ * Purpose: measure RAM usage of the SIMON
+ * implementation on the ESP32 platform.
+ *
+ * This firmware is used for runtime memory benchmarking
+ * of the cipher implementation.
+ *******************************************************/
 #include <Arduino.h>
 #include <cstdint>
 
-/* Параметры SIMON 64/96 */
+/* РџР°СЂР°РјРµС‚СЂС‹ SIMON 64/96 */
 #define ROTR32(x, r) ((x >> r) | (x << (32 - r)))
 #define ROTL32(x, r) ((x << r) | (x >> (32 - r)))
 
-int const BLOCK_SIZE = 64; // размер блока в битах
-int const T = 42; // число раундов
+int const BLOCK_SIZE = 64; // СЂР°Р·РјРµСЂ Р±Р»РѕРєР° РІ Р±РёС‚Р°С…
+int const T = 42; // С‡РёСЃР»Рѕ СЂР°СѓРЅРґРѕРІ
 
-/* Z2 константа для SIMON 64/96 */
+/* Z2 РєРѕРЅСЃС‚Р°РЅС‚Р° РґР»СЏ SIMON 64/96 */
 static const uint64_t z2 = 0b10101111011100000011010010011000101000010001111110010110110011ULL;
 
 /* Round keys */
 uint32_t RK[T];
 
-/* f-функция */
+/* f-С„СѓРЅРєС†РёСЏ */
 IRAM_ATTR inline uint32_t simon_f(uint32_t x) {
     return (ROTL32(x, 1) & ROTL32(x, 8)) ^ ROTL32(x, 2);
 }
 
-/* Шифрование блока (64 бита) */
+/* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР° (64 Р±РёС‚Р°) */
 IRAM_ATTR uint64_t simon_encrypt(uint64_t blk) {
     uint32_t left = uint32_t(blk >> 32);
     uint32_t right = uint32_t(blk);
@@ -31,7 +38,7 @@ IRAM_ATTR uint64_t simon_encrypt(uint64_t blk) {
     return (uint64_t(left) << 32) | right;
 }
 
-/* Ключевой график (Key schedule) */
+/* РљР»СЋС‡РµРІРѕР№ РіСЂР°С„РёРє (Key schedule) */
 void simon_key_schedule_64_96(const uint32_t key[3]) {
     const uint32_t c = 0xFFFFFFFC;
     RK[0] = key[0];
@@ -55,5 +62,5 @@ void setup() {
 }
 
 void loop() {
-    // Пустой цикл
+    // РџСѓСЃС‚РѕР№ С†РёРєР»
 }

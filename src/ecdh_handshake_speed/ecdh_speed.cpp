@@ -1,8 +1,9 @@
 /*******************************************************
- * ESP32-S3  TLS1.3-like KEX + per-device PSK from MASTER_KEY
- * ECDH P-256 + HMAC auth + TranscriptHash + Finished + HKDF-SHA256
+ * Purpose: measure the execution cost of the ECDH
+ * handshake and related key-derivation steps on ESP32.
  *
- * Output: KEY96 (12 bytes) for your Speck key (Speck not used here)
+ * This firmware is used for timing and performance
+ * analysis of the secure session setup phase.
  *******************************************************/
 #include <WiFi.h>
 #include <Arduino.h>

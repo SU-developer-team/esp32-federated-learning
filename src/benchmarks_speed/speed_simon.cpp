@@ -1,26 +1,33 @@
+/*******************************************************
+ * Purpose: measure execution speed of the SIMON
+ * implementation on the ESP32 platform.
+ *
+ * This firmware is used for encryption performance
+ * benchmarking under repeated workloads.
+ *******************************************************/
 #include <Arduino.h>
 #include <cstdint>
 
-/* Параметры SIMON 64/96 */
+/* РџР°СЂР°РјРµС‚СЂС‹ SIMON 64/96 */
 #define ROTR32(x, r) ((x >> r) | (x << (32 - r)))
 #define ROTL32(x, r) ((x << r) | (x >> (32 - r)))
 
-int N = 32; // размер слова в битах
-int const BLOCK_SIZE = 2 * N; // размер блока в битах
-int const T = 42; // число раундов
+int N = 32; // СЂР°Р·РјРµСЂ СЃР»РѕРІР° РІ Р±РёС‚Р°С…
+int const BLOCK_SIZE = 2 * N; // СЂР°Р·РјРµСЂ Р±Р»РѕРєР° РІ Р±РёС‚Р°С…
+int const T = 42; // С‡РёСЃР»Рѕ СЂР°СѓРЅРґРѕРІ
 
-/* Z2 константа для SIMON 64/96 */
+/* Z2 РєРѕРЅСЃС‚Р°РЅС‚Р° РґР»СЏ SIMON 64/96 */
 static const uint64_t z2 = 0b10101111011100000011010010011000101000010001111110010110110011ULL;
 
 /* Round keys */
 uint32_t RK[T];
 
-/* f-функция */
+/* f-С„СѓРЅРєС†РёСЏ */
 IRAM_ATTR inline uint32_t simon_f(uint32_t x) {
     return (ROTL32(x, 1) & ROTL32(x, 8)) ^ ROTL32(x, 2);
 }
 
-/* Шифрование блока (64 бита) */
+/* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР° (64 Р±РёС‚Р°) */
 IRAM_ATTR uint64_t simon_encrypt(uint64_t blk) {
     uint32_t left = uint32_t(blk >> 32);
     uint32_t right = uint32_t(blk);
@@ -32,7 +39,7 @@ IRAM_ATTR uint64_t simon_encrypt(uint64_t blk) {
     return (uint64_t(left) << 32) | right;
 }
 
-/* Дешифрование блока (64 бита) */
+/* Р”РµС€РёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР° (64 Р±РёС‚Р°) */
 IRAM_ATTR uint64_t simon_decrypt(uint64_t blk) {
     uint32_t left = uint32_t(blk >> 32);
     uint32_t right = uint32_t(blk);
@@ -44,7 +51,7 @@ IRAM_ATTR uint64_t simon_decrypt(uint64_t blk) {
     return (uint64_t(left) << 32) | right;
 }
 
-/* Ключевой график (Key schedule) */
+/* РљР»СЋС‡РµРІРѕР№ РіСЂР°С„РёРє (Key schedule) */
 void simon_key_schedule_64_96(const uint32_t key[3]) {
     const uint32_t c = 0xFFFFFFFC;
     RK[0] = key[0];
@@ -61,15 +68,15 @@ void simon_key_schedule_64_96(const uint32_t key[3]) {
 
 void setup() {
     Serial.begin(115200);
-    delay(10000); // Задержка 10 секунд для инициализации Serial
+    delay(10000); // Р—Р°РґРµСЂР¶РєР° 10 СЃРµРєСѓРЅРґ РґР»СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё Serial
 
     Serial.println("=== Starting SIMON 64/96 test ===");
     const uint32_t KEY96[3] = {0x03020100, 0x0B0A0908, 0x13121110};
     simon_key_schedule_64_96(KEY96);
 
     uint64_t pt = 0x6f7220676e696c63; // plaintext
-    size_t data_size = sizeof(pt); // размер в байтах
-    uint32_t data_bits = data_size * 8; // размер в битах
+    size_t data_size = sizeof(pt); // СЂР°Р·РјРµСЂ РІ Р±Р°Р№С‚Р°С…
+    uint32_t data_bits = data_size * 8; // СЂР°Р·РјРµСЂ РІ Р±РёС‚Р°С…
 
     Serial.print("Plaintext (PT) = 0x");
     Serial.println(pt, HEX);
@@ -79,9 +86,9 @@ void setup() {
     Serial.print(data_bits);
     Serial.println(" bits)");
 
-    // Измерение времени одной итерации шифрования
+    // РР·РјРµСЂРµРЅРёРµ РІСЂРµРјРµРЅРё РѕРґРЅРѕР№ РёС‚РµСЂР°С†РёРё С€РёС„СЂРѕРІР°РЅРёСЏ
     Serial.println("=== Measuring single encryption ===");
-    volatile uint64_t ct = 0; // volatile для предотвращения оптимизации
+    volatile uint64_t ct = 0; // volatile РґР»СЏ РїСЂРµРґРѕС‚РІСЂР°С‰РµРЅРёСЏ РѕРїС‚РёРјРёР·Р°С†РёРё
     noInterrupts();
     uint32_t start_cycles = ESP.getCycleCount();
     ct = simon_encrypt(pt);
@@ -100,7 +107,7 @@ void setup() {
     Serial.print(enc_time_us, 4);
     Serial.println(" microseconds");
 
-    // Измерение времени одной итерации дешифрования
+    // РР·РјРµСЂРµРЅРёРµ РІСЂРµРјРµРЅРё РѕРґРЅРѕР№ РёС‚РµСЂР°С†РёРё РґРµС€РёС„СЂРѕРІР°РЅРёСЏ
     Serial.println("=== Measuring single decryption ===");
     volatile uint64_t dec = 0;
     noInterrupts();
@@ -118,7 +125,7 @@ void setup() {
     Serial.print(dec_time_us, 4);
     Serial.println(" microseconds");
 
-    // Измерение времени 5000 итераций шифрования (ESP.getCycleCount)
+    // РР·РјРµСЂРµРЅРёРµ РІСЂРµРјРµРЅРё 5000 РёС‚РµСЂР°С†РёР№ С€РёС„СЂРѕРІР°РЅРёСЏ (ESP.getCycleCount)
     Serial.println("\n=== Measuring 5000 encryptions (ESP.getCycleCount) ===");
     volatile uint64_t dummy = 0;
     const size_t ITERATIONS = 5000;
@@ -142,7 +149,7 @@ void setup() {
     Serial.print(enc_time_us / ITERATIONS, 4);
     Serial.println(" microseconds");
 
-    // Измерение времени 5000 итераций дешифрования (ESP.getCycleCount)
+    // РР·РјРµСЂРµРЅРёРµ РІСЂРµРјРµРЅРё 5000 РёС‚РµСЂР°С†РёР№ РґРµС€РёС„СЂРѕРІР°РЅРёСЏ (ESP.getCycleCount)
     Serial.println("\n=== Measuring 5000 decryptions (ESP.getCycleCount) ===");
     dummy = 0;
     noInterrupts();
@@ -174,5 +181,5 @@ void setup() {
 }
 
 void loop() {
-    // Пустой цикл
+    // РџСѓСЃС‚РѕР№ С†РёРєР»
 }

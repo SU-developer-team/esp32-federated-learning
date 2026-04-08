@@ -1,8 +1,9 @@
 /*******************************************************
- * ESP32-S3  TLS1.3-like KEX + per-device PSK from MASTER_KEY
- * ECDH P-256 + HMAC auth + TranscriptHash + Finished + HKDF-SHA256
+ * Purpose: perform a TLS-like ECDH handshake on ESP32
+ * and derive a shared session key from the exchange.
  *
- * Output: KEY96 (12 bytes) for your Speck key (Speck not used here)
+ * This firmware demonstrates authenticated key exchange
+ * without running the federated training pipeline.
  *******************************************************/
 #include <WiFi.h>
 #include <Arduino.h>

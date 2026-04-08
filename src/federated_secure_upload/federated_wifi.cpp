@@ -1,14 +1,9 @@
 /*******************************************************
- * ESP32-S3 <-> Direct TCP <-> SPECK-64/96
- * Wi-Fi + ECDH authentication + encrypted weights upload.
+ * Purpose: upload encrypted model data over Wi-Fi after
+ * establishing an authenticated ECDH-based session.
  *
- * Training logic removed. The device now:
- *  - connects to Wi-Fi
- *  - authenticates with ECDH
- *  - derives a SPECK key
- *  - encrypts weights from weights_q.h
- *  - sends them to the server
- *  - decrypts and validates encrypted replies
+ * This firmware focuses on secure transport behavior
+ * without running the full federated training loop.
  *******************************************************/
 #include <Arduino.h>
 #include <WiFi.h>

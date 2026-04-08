@@ -1,17 +1,10 @@
 /*******************************************************
- * ESP32-S3 <-> Direct TCP <-> SPECK (fast LUT, no-IRAM)
- * Federated training: AIfES local training + encrypted
- * weights upload + receive aggregated weights.
+ * Purpose: run encrypted federated learning on device 1
+ * using its local dataset and the shared server.
  *
- * FIXED FLOW (same round):
- *  - Train -> produce metrics_log (CSV)
- *  - Send combined weights + metrics (AIF2)
- *  - If send fails, retry combined
- *  - After receiving global weights -> train next round
- *
- * ADAM FIX:
- *  - When global weights are applied, reset Adam state (m,v) stored in training memory.
- *  - Re-init model for training so next round starts clean.
+ * This firmware trains the model locally, evaluates it,
+ * encrypts weights and metrics, sends them to the server,
+ * and applies aggregated global weights for the next round.
  *******************************************************/
 #include <Arduino.h>
 #include <WiFi.h>
@@ -24,7 +17,7 @@
 
 #include <auth_ecdh.h>
 
-#include "federated_train_device_1/dataset_embedded_30000.h"
+#include "federated_train_device_1/device_1_dataset_embedded.h"
 #include "federated_train_device_1/device_1_dataset_test.h"
 
 #include <mbedtls/sha256.h>
@@ -175,10 +168,10 @@ static const uint32_t SHUFFLE_SEED  = 42;
 
 static const uint32_t BATCH_SIZE = 32;
 
-static const uint16_t MAX_EPOCHS = 50;
+static const uint16_t MAX_EPOCHS = 1;
 static const uint16_t PATIENCE  = 15;
 static const float    MIN_DELTA = 1e-4f;
-static const uint16_t TRAIN_ROUNDS = 1;
+static const uint16_t TRAIN_ROUNDS = 40;
 
 static const float ADAM_BETA1 = 0.9f;
 static const float ADAM_BETA2 = 0.999f;
@@ -412,10 +405,10 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
     uint16_t out_shape[2] = {1, DS_K};
     aitensor_t out_tensor = AITENSOR_2D_F32(out_shape, outK);
 
-    // Резервируем память заранее (примерно 200 байт на строку × N + заголовок)
+    // Р РµР·РµСЂРІРёСЂСѓРµРј РїР°РјСЏС‚СЊ Р·Р°СЂР°РЅРµРµ (РїСЂРёРјРµСЂРЅРѕ 200 Р±Р°Р№С‚ РЅР° СЃС‚СЂРѕРєСѓ Г— N + Р·Р°РіРѕР»РѕРІРѕРє)
     test_csv.reserve(200 * (size_t)N + 512);
 
-    // Заголовок
+    // Р—Р°РіРѕР»РѕРІРѕРє
     test_csv = "Sample,True_Label,Predicted_Label,Correct";
     for (uint8_t k = 0; k < DS_K; k++) {
         test_csv += ",Prob";
@@ -425,7 +418,7 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
 
     uint32_t correct = 0;
 
-    char line_buf[1024];  // Увеличили до 1024 — должно хватить даже для DS_K=32
+    char line_buf[1024];  // РЈРІРµР»РёС‡РёР»Рё РґРѕ 1024 вЂ” РґРѕР»Р¶РЅРѕ С…РІР°С‚РёС‚СЊ РґР°Р¶Рµ РґР»СЏ DS_K=32
 
     for (uint16_t i = 0; i < N; i++) {
         for (uint16_t j = 0; j < DS_F; j++) x1[j] = X[i][j];
@@ -434,7 +427,7 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
         bool is_correct = (pred == Y[i]);
         if (is_correct) correct++;
 
-        // Формируем строку безопасно
+        // Р¤РѕСЂРјРёСЂСѓРµРј СЃС‚СЂРѕРєСѓ Р±РµР·РѕРїР°СЃРЅРѕ
         int len = snprintf(line_buf, sizeof(line_buf),
                            "%u,%u,%u,%s",
                            (unsigned)i, (unsigned)Y[i], (unsigned)pred,
@@ -457,7 +450,7 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
             ptr += prob_len;
         }
 
-        // Добавляем \n
+        // Р”РѕР±Р°РІР»СЏРµРј \n
         if (ptr - line_buf + 2 <= (int)sizeof(line_buf)) {
             *ptr++ = '\n';
             *ptr = '\0';
@@ -470,7 +463,7 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
 
     float acc = 100.0f * (float)correct / (float)N;
 
-    // Добавляем итоговую accuracy
+    // Р”РѕР±Р°РІР»СЏРµРј РёС‚РѕРіРѕРІСѓСЋ accuracy
     char acc_line[128];
     snprintf(acc_line, sizeof(acc_line), "\n# Overall Test Accuracy: %.2f\n", (double)acc);
     test_csv += acc_line;
@@ -490,9 +483,18 @@ static bool g_data_ready = false;
 static uint32_t g_last_send_ms = 0;
 constexpr uint32_t SEND_PERIOD_MS = 15000;
 constexpr uint32_t RESEND_TIMEOUT_MS = 60000;
+constexpr uint32_t TX_SOCKET_TIMEOUT_SEC = 5;
+constexpr uint8_t TX_RETRY_ATTEMPTS = 2;
+constexpr size_t METRICS_LOG_CAPACITY = 256 + ((size_t)MAX_EPOCHS * 128);
+constexpr size_t TEST_CSV_CAPACITY = ((size_t)TDS_N * 200) + 512;
+constexpr size_t METRICS_PENDING_CAPACITY = METRICS_LOG_CAPACITY + 32 + TEST_CSV_CAPACITY;
 
 // Metrics now combined with weights
 static String g_metrics_pending;
+static String g_metrics_log_buf;
+static String g_test_csv_buf;
+static uint8_t* g_tx_buf = nullptr;
+static size_t g_tx_buf_size = 0;
 
 static constexpr uint8_t WEIGHTS_MAGIC[4] = {'A', 'I', 'F', '2'};  // Use AIF2 for combined
 
@@ -500,6 +502,56 @@ struct EncResult {
     uint8_t* data;
     size_t len;
 };
+
+static void log_mem_snapshot(const char* tag) {
+    size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    size_t heap_free = ESP.getFreeHeap();
+    size_t heap_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+
+    Serial.printf("MEM %s: heap_free=%u heap_largest=%u psram_free=%u psram_largest=%u\n",
+                  tag,
+                  (unsigned)heap_free,
+                  (unsigned)heap_largest,
+                  (unsigned)psram_free,
+                  (unsigned)psram_largest);
+}
+
+static size_t padded_payload_len(size_t weights_len, size_t metrics_len) {
+    const size_t header_len = 4 + 4 + 4;
+    const size_t data_len = header_len + weights_len + metrics_len + 32;
+    return ((data_len + 7) / 8) * 8;
+}
+
+static void prepare_runtime_buffers() {
+    if (!g_metrics_log_buf.reserve(METRICS_LOG_CAPACITY)) {
+        Serial.printf("WARN: metrics_log reserve failed (%u)\n", (unsigned)METRICS_LOG_CAPACITY);
+    }
+    if (!g_test_csv_buf.reserve(TEST_CSV_CAPACITY)) {
+        Serial.printf("WARN: test_csv reserve failed (%u)\n", (unsigned)TEST_CSV_CAPACITY);
+    }
+    if (!g_metrics_pending.reserve(METRICS_PENDING_CAPACITY)) {
+        Serial.printf("WARN: metrics_pending reserve failed (%u)\n", (unsigned)METRICS_PENDING_CAPACITY);
+    }
+
+    size_t required_tx_buf = padded_payload_len(psize, METRICS_PENDING_CAPACITY);
+    if (!g_tx_buf || g_tx_buf_size < required_tx_buf) {
+        if (g_tx_buf) {
+            heap_caps_free(g_tx_buf);
+            g_tx_buf = nullptr;
+            g_tx_buf_size = 0;
+        }
+        g_tx_buf = (uint8_t*)heap_caps_malloc(required_tx_buf, MALLOC_CAP_SPIRAM);
+        if (!g_tx_buf) {
+            Serial.printf("FATAL: g_tx_buf alloc failed (%u)\n", (unsigned)required_tx_buf);
+            log_mem_snapshot("g_tx_buf_alloc_failed");
+            while (true) delay(1000);
+        }
+        g_tx_buf_size = required_tx_buf;
+        Serial.printf("TX buffer allocated once: %u bytes\n", (unsigned)g_tx_buf_size);
+        log_mem_snapshot("g_tx_buf_ready");
+    }
+}
 
 static inline uint32_t read_u32_be(const uint8_t* p) {
     return ((uint32_t)p[0] << 24) |
@@ -531,14 +583,20 @@ static EncResult buildAndEncryptCombined(const uint8_t* weights, size_t weights_
 
     const size_t header_len = 4 + 4 + 4;  // AIF2 + u32 weights_len + u32 metrics_len
     const size_t dataLen = header_len + weights_len + metrics_len + 32;
-    const size_t paddedLen = ((dataLen + 7) / 8) * 8;
+    const size_t paddedLen = padded_payload_len(weights_len, metrics_len);
 
-    uint8_t* dataBuf = (uint8_t*)heap_caps_malloc(paddedLen, MALLOC_CAP_SPIRAM);
-    if (!dataBuf) {
-        Serial.println("heap_caps_malloc failed for payload");
+    Serial.printf("TX buffer plan: header=%u plain=%u padded=%u hash=32\n",
+                  (unsigned)header_len, (unsigned)dataLen, (unsigned)paddedLen);
+    log_mem_snapshot("before_encrypt_alloc");
+
+    if (!g_tx_buf || g_tx_buf_size < paddedLen) {
+        Serial.printf("TX buffer too small: need=%u have=%u\n",
+                      (unsigned)paddedLen, (unsigned)g_tx_buf_size);
+        log_mem_snapshot("tx_buf_too_small");
         return {nullptr, 0};
     }
 
+    uint8_t* dataBuf = g_tx_buf;
     dataBuf[0] = WEIGHTS_MAGIC[0];
     dataBuf[1] = WEIGHTS_MAGIC[1];
     dataBuf[2] = WEIGHTS_MAGIC[2];
@@ -550,12 +608,6 @@ static EncResult buildAndEncryptCombined(const uint8_t* weights, size_t weights_
     memcpy(dataBuf + header_len + weights_len + metrics_len, hash, 32);
     memset(dataBuf + dataLen, 0, paddedLen - dataLen);
 
-    uint8_t* ctBuf = (uint8_t*)heap_caps_malloc(paddedLen, MALLOC_CAP_SPIRAM);
-    if (!ctBuf) {
-        heap_caps_free(dataBuf);
-        return {nullptr, 0};
-    }
-
     for (size_t i = 0; i < paddedLen; i += 8) {
         uint64_t blk = 0;
         for (int j = 0; j < 8; ++j) {
@@ -563,7 +615,7 @@ static EncResult buildAndEncryptCombined(const uint8_t* weights, size_t weights_
         }
         uint64_t ct = enc64_fast(blk);
         for (int j = 0; j < 8; ++j) {
-            ctBuf[i + j] = (uint8_t)(ct >> (56 - j*8));
+            dataBuf[i + j] = (uint8_t)(ct >> (56 - j * 8));
         }
     }
 
@@ -572,8 +624,8 @@ static EncResult buildAndEncryptCombined(const uint8_t* weights, size_t weights_
     enc_pkt_cyc += cyc_pkt;
     ++enc_pkt_cnt;
 
-    heap_caps_free(dataBuf);
-    return {ctBuf, paddedLen};
+    log_mem_snapshot("after_encrypt_inplace");
+    return {dataBuf, paddedLen};
 }
 
 /* ----------- ADAM FIX helper: reset optimizer state after global ----------- */
@@ -678,35 +730,70 @@ static bool process_response_apply_weights(const uint8_t* pay, size_t len) {
 }
 
 static bool send_combined_frame() {
-    if (!pmem || psize == 0 || g_metrics_pending.length() == 0) return false;
-
-    size_t metrics_len = g_metrics_pending.length();
-    EncResult enc = buildAndEncryptCombined((const uint8_t*)pmem, psize, g_metrics_pending.c_str(), metrics_len);
-    if (!enc.data || enc.len == 0) return false;
-
-    if (!ensure_session()) {
-        heap_caps_free(enc.data);
+    if (!pmem || psize == 0) {
+        Serial.println("TX skipped: model weights are not ready");
         return false;
     }
+    if (g_metrics_pending.length() == 0) {
+        Serial.println("TX skipped: metrics payload is empty");
+        return false;
+    }
+
+    size_t metrics_len = g_metrics_pending.length();
+    Serial.printf("TX prepare: weights=%u metrics=%u bytes\n",
+                  (unsigned)psize, (unsigned)metrics_len);
+    log_mem_snapshot("before_tx_prepare");
+
+    EncResult enc = buildAndEncryptCombined((const uint8_t*)pmem, psize, g_metrics_pending.c_str(), metrics_len);
+    if (!enc.data || enc.len == 0) {
+        Serial.println("TX prepare failed: encryption buffer was not created");
+        log_mem_snapshot("tx_prepare_failed");
+        return false;
+    }
+
+    Serial.printf("TX encrypted payload ready: ciphertext=%u bytes\n", (unsigned)enc.len);
+    log_mem_snapshot("tx_payload_ready");
 
     uint8_t type = APP_DATA;
     uint8_t len_be[4];
     write_u32_be(len_be, (uint32_t)enc.len);
 
-    size_t w1 = net.write(&type, 1);
-    size_t w2 = net.write(len_be, 4);
-    size_t w3 = net.write(enc.data, enc.len);
+    for (uint8_t attempt = 1; attempt <= TX_RETRY_ATTEMPTS; ++attempt) {
+        Serial.printf("TX attempt %u/%u: start\n",
+                      (unsigned)attempt, (unsigned)TX_RETRY_ATTEMPTS);
 
-    heap_caps_free(enc.data);
+        if (!ensure_session()) {
+            Serial.printf("TX attempt %u/%u aborted: session is not ready\n",
+                          (unsigned)attempt, (unsigned)TX_RETRY_ATTEMPTS);
+            return false;
+        }
 
-    if (w1 != 1 || w2 != 4 || w3 != enc.len) {
-        Serial.println("TX failed");
-        return false;
+        if (net.setTimeout(TX_SOCKET_TIMEOUT_SEC) < 0) {
+            Serial.println("TX socket timeout setup failed");
+        }
+
+        size_t w1 = net.write(&type, 1);
+        size_t w2 = net.write(len_be, 4);
+        size_t w3 = net.write(enc.data, enc.len);
+
+        if (w1 == 1 && w2 == 4 && w3 == enc.len) {
+            Serial.printf("Combined sent: weights=%u metrics=%u ciphertext=%u bytes\n",
+                          (unsigned)psize, (unsigned)metrics_len, (unsigned)enc.len);
+            log_mem_snapshot("tx_sent_ok");
+            return true;
+        }
+
+        Serial.printf("TX failed on attempt %u/%u (w1=%u w2=%u w3=%u expected=%u)\n",
+                      (unsigned)attempt, (unsigned)TX_RETRY_ATTEMPTS,
+                      (unsigned)w1, (unsigned)w2, (unsigned)w3, (unsigned)enc.len);
+        log_mem_snapshot("tx_attempt_failed");
+        net.stop();
+        g_key_ready = false;
+        delay(50);
     }
 
-    Serial.printf("Combined sent: weights=%u metrics=%u ciphertext=%u bytes\n",
-                  (unsigned)psize, (unsigned)metrics_len, (unsigned)enc.len);
-    return true;
+    Serial.println("TX failed: combined payload was not sent after all attempts");
+    return false;
 }
 
 /* ------------------- RX state machine ------------------- */
@@ -800,7 +887,7 @@ static void rx_pump() {
 
 /* ------------------- Perf print ------------------- */
 static void printPerf() {
-    heap_caps_check_integrity_all(true);  // Проверка на повреждение heap (для дебага)
+    heap_caps_check_integrity_all(true);  // РџСЂРѕРІРµСЂРєР° РЅР° РїРѕРІСЂРµР¶РґРµРЅРёРµ heap (РґР»СЏ РґРµР±Р°РіР°)
     
     static uint32_t lastMs = 0;
     uint32_t now = millis();
@@ -888,6 +975,7 @@ static void training_task(void* pv) {
     }
     if (!g_model_built) {
         build_model();
+        prepare_runtime_buffers();
         g_model_built = true;
     } else {
         if (best_pmem) memcpy(best_pmem, pmem, psize);
@@ -898,14 +986,19 @@ static void training_task(void* pv) {
     aialgo_calc_loss_model_f32(&model, &x_val,   &y_val,   &va0);
     Serial.printf("Initial train_loss=%.6f val_loss=%.6f\n", (double)tr0, (double)va0);
 
-    String metrics_log;
+    g_metrics_log_buf = "";
+    g_test_csv_buf = "";
+
+    String& metrics_log = g_metrics_log_buf;
     train_with_early_stopping(metrics_log);
 
-    String test_csv;
+    String& test_csv = g_test_csv_buf;
     float test_acc = eval_test_plain(TDS_X, TDS_Y, TDS_N, test_csv);
     Serial.printf("FINAL_TEST_ACC=%.2f\n", (double)test_acc);
+    Serial.printf("TEST CSV size=%u bytes\n", (unsigned)test_csv.length());
+    log_mem_snapshot("after_test_eval");
 
-    // Вывод первых 10 строк test_csv в терминал
+    // Р’С‹РІРѕРґ РїРµСЂРІС‹С… 10 СЃС‚СЂРѕРє test_csv РІ С‚РµСЂРјРёРЅР°Р»
     Serial.println("\nFirst 10 rows of test_csv:");
     int line_count = 0;
     int pos = 0;
@@ -933,8 +1026,13 @@ static void training_task(void* pv) {
         Serial.println();
     }
 
-    // Объединяем metrics_log и test_csv для отправки
+    // РћР±СЉРµРґРёРЅСЏРµРј metrics_log Рё test_csv РґР»СЏ РѕС‚РїСЂР°РІРєРё
     g_metrics_pending = metrics_log + "\n# Test Results\n" + test_csv;
+    Serial.printf("METRICS pending assembled: metrics_log=%u test_csv=%u combined=%u bytes\n",
+                  (unsigned)metrics_log.length(),
+                  (unsigned)test_csv.length(),
+                  (unsigned)g_metrics_pending.length());
+    log_mem_snapshot("after_metrics_concat");
 
     g_weights_ready = true;
     g_waiting_global = false;
@@ -943,6 +1041,8 @@ static void training_task(void* pv) {
     Serial.printf("Local training done. Weights ready (%u bytes).\n", (unsigned)psize);
     g_rounds_done++;
     Serial.printf("Round %u/%u completed.\n", (unsigned)g_rounds_done, (unsigned)TRAIN_ROUNDS);
+    Serial.printf("TX queued after round %u: metrics_pending=%u bytes\n",
+                  (unsigned)g_rounds_done, (unsigned)g_metrics_pending.length());
 
     g_training_started = false;
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -1015,6 +1115,8 @@ void loop() {
 
     // Send combined when ready
     if (!g_sent_once && g_weights_ready && !g_waiting_global && (now - g_last_send_ms >= SEND_PERIOD_MS)) {
+        Serial.printf("TX trigger: round=%u weights_ready=1 waiting_global=0 sent_once=0\n",
+                      (unsigned)g_rounds_done);
         bool sent = send_combined_frame();
         g_last_send_ms = now;
 
@@ -1022,6 +1124,9 @@ void loop() {
             g_metrics_pending = "";
             g_waiting_global = true;
             g_sent_once = true;
+            Serial.println("TX state: upload completed, waiting for global weights");
+        } else {
+            Serial.println("TX state: upload did not complete, next retry will be visible in logs");
         }
     }
 

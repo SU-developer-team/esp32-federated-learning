@@ -1,6 +1,9 @@
 /*******************************************************
- *  ESP32-S3  ↔  MQTT  ↔  SIMON   
- *  2025-01-25  – исправлено по стандарту NSA SIMON
+ * Purpose: demonstrate MQTT communication protected with
+ * the SIMON block cipher on the ESP32 device.
+ *
+ * This firmware publishes and receives encrypted payloads
+ * and is used to study secure MQTT behavior and overhead.
  *******************************************************/
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -13,7 +16,7 @@ volatile uint32_t enc_pkt_cyc = 0, dec_pkt_cyc = 0;
 volatile uint32_t enc_pkt_cnt = 0, dec_pkt_cnt = 0;
 volatile uint32_t parse_cyc = 0, parse_cnt = 0;
 
-/* ───── helpers & timer ───── */
+/* в”Ђв”Ђв”Ђв”Ђв”Ђ helpers & timer в”Ђв”Ђв”Ђв”Ђв”Ђ */
 #define TS_START(var) uint32_t var = ESP.getCycleCount()
 static inline float cyc2us(uint32_t d){ return d / (float)ESP.getCpuFreqMHz(); }
 
@@ -33,14 +36,14 @@ constexpr const char* TOPIC_ENC = "iot/enc";
 constexpr const char* CLIENT_ID = "esp32-client";
 constexpr size_t      MQTT_BUF  = 8192;
 
-/* Round-keys для SIMON 64/96 */
-int const T = 42; // число раундов
+/* Round-keys РґР»СЏ SIMON 64/96 */
+int const T = 42; // С‡РёСЃР»Рѕ СЂР°СѓРЅРґРѕРІ
 uint32_t RK[T];
 
-/* Мини-пример весов */
+/* РњРёРЅРё-РїСЂРёРјРµСЂ РІРµСЃРѕРІ */
 const char WEIGHTS[] PROGMEM = R"RAW([[[[-0.22269929945468903, -0.0020684152841567993, -0.028627386316657066, -0.04175390675663948, 0.02046719379723072, 0.08776327967643738, -0.06972722709178925, -0.0024031028151512146, -0.1369350701570511, 0.07604920864105225, -0.15909017622470856, -0.11621670424938202, 0.01977522112429142, 0.05549396574497223, -0.006383150815963745, -0.38754409551620483, 0.019943036139011383, -0.1304830014705658, 0.09386514127254486, 0.08403369039297104, 0.04103871434926987, 0.001162276603281498, -0.21528294682502747, 0.08617235720157623, -0.0812213271856308, 0.10415084660053253, -0.047551874071359634, -0.10483313351869583, 0.04774774610996246, -0.11372575163841248, 0.032191865146160126, 0.047332197427749634, 0.05957270786166191, -0.003320351243019104, -0.19130374491214752, -0.5056506395339966, 0.0594739094376564, 0.09424041211605072, -0.005374163389205933, -0.09813196212053299, 0.06058444082736969, -0.012654859572649002, -0.20923274755477905, -0.029386963695287704, 0.03915838152170181, 0.03987979143857956, 0.118799589574337, -0.1517963707447052, -0.12310691177845001, 0.02752935327589512, -0.07804187387228012, 0.0912553071975708, -0.028958793729543686, 0.01714150607585907, 0.06191866844892502, -0.13848546147346497, -0.03784804418683052, -0.09685277193784714, -0.13155832886695862, 0.04564664885401726, -0.12638293206691742, -0.4195791482925415, -0.07618607580661774, -0.06411894410848618]], [[-0.38721707463264465, 0.10108035802841187, -0.547479510307312, -0.142031729221344, -0.25518128275871277, 0.08117641508579254, 0.032983507961034775, -0.017013398930430412, 0.007050002459436655, -0.054755937308073044, 0.020490612834692, -0.49241167306900024, 0.0165400467813015, 0.06026015430688858, 0.0010598376393318176, -0.5442346334457397, 0.0368630550801754, -0.03570526838302612, -0.038232430815696716, -0.07469354569911957, 0.025067295879125595, -0.015666861087083817, 0.018609998747706413, -0.3061330318450928, 0.05790018290281296, 0.048334307968616486, -0.24385195970535278, -0.07935438305139542, -0.1819179654121399, 0.11193083971738815, 0.026050634682178497, -0.016550563275814056, 0.06019206717610359, -0.36496007442474365, -0.02235141023993492, 0.008374023251235485, 0.024556607007980347, -0.05442333221435547, -0.6205769777297974, -0.2319582849740982, -0.1597018837928772, 0.11711525917053223, -0.08185379207134247, 0.03631089627742767, -0.11780697852373123, 0.07119498401880264, 0.00010193139314651489, -0.2678371071815491, 0.03866139054298401, -0.42356234788894653, 0.09636807441711426, -0.01641259714961052, -0.12778903543949127, -1.0513049364089966, -0.04323035851120949, 0.08268750458955765, -0.31393373012542725, 0.02999350056052208, -0.08584080636501312, -0.23677249252796173, -0.02576761692762375, -0.2608223557472229, -0.1403527706861496, -0.007824636995792389]]]])RAW";
 
-/* Буферы */
+/* Р‘СѓС„РµСЂС‹ */
 StaticJsonDocument<4096> doc;
 char            jsonBuf[4096];
 uint64_t        ctBuf[600];
@@ -52,24 +55,24 @@ volatile uint32_t enc_cnt=0, dec_cnt=0;
 WiFiClient   net;
 PubSubClient mqtt(net);
 
-/* ИСПРАВЛЕНО: Ключ для SIMON 64/96 в правильном формате */
+/* РРЎРџР РђР’Р›Р•РќРћ: РљР»СЋС‡ РґР»СЏ SIMON 64/96 РІ РїСЂР°РІРёР»СЊРЅРѕРј С„РѕСЂРјР°С‚Рµ */
 const uint32_t KEY96[3] = { 0x03020100, 0x0B0A0908, 0x13121110 };// const uint32_t KEY96[3] = { 0x03020100, 0x0B0A0908, 0x13121110 };
 
-/* ───────────────────── SIMON IMPLEMENTATION ───────────────────── */
+/* в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ SIMON IMPLEMENTATION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ */
 
-/* ИСПРАВЛЕНО: z2 последовательность для SIMON 64/96 по стандарту */
+/* РРЎРџР РђР’Р›Р•РќРћ: z2 РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ РґР»СЏ SIMON 64/96 РїРѕ СЃС‚Р°РЅРґР°СЂС‚Сѓ */
 static const uint64_t z2 = 0b10101111011100000011010010011000101000010001111110010110110011ULL;
 
-/* ИСПРАВЛЕНО: SIMON key schedule для SIMON 64/96 - строго по стандарту */
+/* РРЎРџР РђР’Р›Р•РќРћ: SIMON key schedule РґР»СЏ SIMON 64/96 - СЃС‚СЂРѕРіРѕ РїРѕ СЃС‚Р°РЅРґР°СЂС‚Сѓ */
 void simon_key_schedule_64_96(const uint32_t key[3]) {
     const uint32_t c = 0xFFFFFFFC;  // c = 2^n - 4
     
-    // Первые 3 ключа раунда - это исходный ключ
+    // РџРµСЂРІС‹Рµ 3 РєР»СЋС‡Р° СЂР°СѓРЅРґР° - СЌС‚Рѕ РёСЃС…РѕРґРЅС‹Р№ РєР»СЋС‡
     RK[0] = key[0];
     RK[1] = key[1]; 
     RK[2] = key[2];
     
-    // Генерируем оставшиеся ключи (42 раунда для SIMON 64/96)
+    // Р“РµРЅРµСЂРёСЂСѓРµРј РѕСЃС‚Р°РІС€РёРµСЃСЏ РєР»СЋС‡Рё (42 СЂР°СѓРЅРґР° РґР»СЏ SIMON 64/96)
     for (int i = 3; i <= T-1; i++) {
         uint32_t tmp = ROTR32(RK[i-1], 3);     // S^-3(k[i-1])                        // S^-3(k[i-1]) XOR k[i-3]
         tmp ^= ROTR32(tmp, 1);                 // (I XOR S^-1)(S^-3(k[i-1]) XOR k[i-3])
@@ -79,18 +82,18 @@ void simon_key_schedule_64_96(const uint32_t key[3]) {
 }
 
 
-/* SIMON f функция - правильная по стандарту */
+/* SIMON f С„СѓРЅРєС†РёСЏ - РїСЂР°РІРёР»СЊРЅР°СЏ РїРѕ СЃС‚Р°РЅРґР°СЂС‚Сѓ */
 inline uint32_t simon_f(uint32_t x) {
     return (ROTL32(x, 1) & ROTL32(x, 8)) ^ ROTL32(x, 2);
 }
 
 #define DEBUG_BLOCK_TIMING
 
-/* ИСПРАВЛЕНО: Шифрование SIMON-64/96 по стандарту */
+/* РРЎРџР РђР’Р›Р•РќРћ: РЁРёС„СЂРѕРІР°РЅРёРµ SIMON-64/96 РїРѕ СЃС‚Р°РЅРґР°СЂС‚Сѓ */
 inline uint64_t enc64_fast(uint64_t blk) {
     TS_START(t0);
-    uint32_t x = uint32_t(blk >> 32);        // младшие 32 бита (правая половина)
-    uint32_t y = uint32_t(blk);  // старшие 32 бита (левая половина)
+    uint32_t x = uint32_t(blk >> 32);        // РјР»Р°РґС€РёРµ 32 Р±РёС‚Р° (РїСЂР°РІР°СЏ РїРѕР»РѕРІРёРЅР°)
+    uint32_t y = uint32_t(blk);  // СЃС‚Р°СЂС€РёРµ 32 Р±РёС‚Р° (Р»РµРІР°СЏ РїРѕР»РѕРІРёРЅР°)
 
     // SIMON Feistel: (x,y) -> (y XOR f(x) XOR k, x)
     for (int i = 0; i <= T - 1; i++) {
@@ -103,7 +106,7 @@ inline uint64_t enc64_fast(uint64_t blk) {
     enc_cyc += cyc;  ++enc_cnt;
 
 #ifdef DEBUG_BLOCK_TIMING
-    Serial.printf("ENC  P=0x%016llX -> C=0x%016llX  |  %u cyc  (%.2f µs)\n",
+    Serial.printf("ENC  P=0x%016llX -> C=0x%016llX  |  %u cyc  (%.2f Вµs)\n",
                   (unsigned long long)blk,
                   (unsigned long long)((uint64_t(x) << 32) | y),
                   cyc, cyc2us(cyc));
@@ -111,13 +114,13 @@ inline uint64_t enc64_fast(uint64_t blk) {
     return (uint64_t(x) << 32) | y;
 }
 
-/* ИСПРАВЛЕНО: Дешифрование SIMON-64/96 по стандарту */
+/* РРЎРџР РђР’Р›Р•РќРћ: Р”РµС€РёС„СЂРѕРІР°РЅРёРµ SIMON-64/96 РїРѕ СЃС‚Р°РЅРґР°СЂС‚Сѓ */
 inline uint64_t dec64_fast(uint64_t blk) {
     TS_START(t0);
-    uint32_t x = uint32_t(blk >> 32);        // младшие 32 бита
-    uint32_t y = uint32_t(blk);  // старшие 32 бита
+    uint32_t x = uint32_t(blk >> 32);        // РјР»Р°РґС€РёРµ 32 Р±РёС‚Р°
+    uint32_t y = uint32_t(blk);  // СЃС‚Р°СЂС€РёРµ 32 Р±РёС‚Р°
 
-    // Обратный SIMON Feistel: (x,y) -> (y, x XOR f(y) XOR k)
+    // РћР±СЂР°С‚РЅС‹Р№ SIMON Feistel: (x,y) -> (y, x XOR f(y) XOR k)
     for (int i = T - 1; i >= 0; --i) {
     uint32_t tmp = y;
     y = x ^ simon_f(tmp) ^ RK[i];
@@ -128,7 +131,7 @@ inline uint64_t dec64_fast(uint64_t blk) {
     dec_cyc += cyc;  ++dec_cnt;
 
 #ifdef DEBUG_BLOCK_TIMING
-    Serial.printf("DEC  C=0x%016llX -> P=0x%016llX  |  %u cyc  (%.2f µs)\n",
+    Serial.printf("DEC  C=0x%016llX -> P=0x%016llX  |  %u cyc  (%.2f Вµs)\n",
                   (unsigned long long)blk,
                   (unsigned long long)((uint64_t(x) << 32) | y),
                   cyc, cyc2us(cyc));
@@ -136,19 +139,19 @@ inline uint64_t dec64_fast(uint64_t blk) {
     return (uint64_t(x) << 32) | y;
 }
 void test_vectors() {
-    // Тестовый ключ (из статьи, Simon 64/96)
+    // РўРµСЃС‚РѕРІС‹Р№ РєР»СЋС‡ (РёР· СЃС‚Р°С‚СЊРё, Simon 64/96)
     const uint32_t KEY96_test[3] = { 0x03020100, 0x0B0A0908, 0x13121110 };
     simon_key_schedule_64_96(KEY96_test);
 
-    // Plaintext (из статьи)
+    // Plaintext (РёР· СЃС‚Р°С‚СЊРё)
     uint64_t pt = 0x6f7220676e696c63; // plaintext
 
-    // Ожидаемый ciphertext
+    // РћР¶РёРґР°РµРјС‹Р№ ciphertext
     uint64_t ct_expected = 0x5ca2e27f111a8fc8ULL;
-    // Шифруем
+    // РЁРёС„СЂСѓРµРј
     uint64_t ct = enc64_fast(pt);
 
-    // Дешифруем обратно
+    // Р”РµС€РёС„СЂСѓРµРј РѕР±СЂР°С‚РЅРѕ
     uint64_t dec = dec64_fast(ct);
 
     Serial.printf("\n=== SIMON 64/96 TEST VECTOR ===\n");
@@ -187,7 +190,7 @@ void cb(char*, byte* pay, unsigned len)
     }
 
     uint32_t cyc_pkt = ESP.getCycleCount() - pkt_t0;
-    Serial.printf("DEC packet: %u cyc  (%.2f µs)  |  %u blocks  (%.2f µs/blk)\n",
+    Serial.printf("DEC packet: %u cyc  (%.2f Вµs)  |  %u blocks  (%.2f Вµs/blk)\n",
                   cyc_pkt, cyc2us(cyc_pkt), blks,
                   blks ? cyc2us(cyc_pkt) / blks : 0.0f);
     Serial.printf("Decrypted JSON: %s\n\n", json.c_str());
@@ -199,12 +202,12 @@ void cb(char*, byte* pay, unsigned len)
     ++parse_cnt;
 }
 
-/* Build JSON → encrypt → MQTT string */
+/* Build JSON в†’ encrypt в†’ MQTT string */
 String buildAndEncrypt()
 {
     TS_START(pkt_t0);
     
-    /* Формируем JSON */
+    /* Р¤РѕСЂРјРёСЂСѓРµРј JSON */
     doc.clear();
     deserializeJson(doc["weights"], FPSTR(WEIGHTS));
     JsonObject meta = doc.createNestedObject("esp_info");
@@ -217,7 +220,7 @@ String buildAndEncrypt()
 
     Serial.printf("Plaintext size: %u bytes (%u bits)\n", jsonLen, jsonLen * 8);
 
-    /* Шифруем */
+    /* РЁРёС„СЂСѓРµРј */
     TS_START(t0);
     for (uint16_t i = 0; i < blocks; ++i) {
         uint64_t blk = 0;
@@ -234,13 +237,13 @@ String buildAndEncrypt()
     uint32_t cyc_pkt = ESP.getCycleCount() - t0;
     float us_pkt = cyc2us(cyc_pkt);
 
-    Serial.printf("ENC packet: %u cyc  (%.2f µs)  |  %u blocks  (%.2f µs/blk)\n",
+    Serial.printf("ENC packet: %u cyc  (%.2f Вµs)  |  %u blocks  (%.2f Вµs/blk)\n",
                   cyc_pkt, us_pkt, blocks, us_pkt / blocks);
 
     enc_pkt_cyc += ESP.getCycleCount() - pkt_t0;
     ++enc_pkt_cnt;
 
-    /* Склеиваем в "i:HEX,..." */
+    /* РЎРєР»РµРёРІР°РµРј РІ "i:HEX,..." */
     String out; out.reserve(blocks * 20);
     for (uint16_t i = 0; i < blocks; ++i) {
         out += String(i);
@@ -253,13 +256,13 @@ String buildAndEncrypt()
     return out;
 }
 
-/* Печать производительности */
+/* РџРµС‡Р°С‚СЊ РїСЂРѕРёР·РІРѕРґРёС‚РµР»СЊРЅРѕСЃС‚Рё */
 void printPerf()
 {
     static uint32_t lastMs = 0;
     uint32_t now = millis();
     uint32_t dtMs = now - lastMs;
-    if (dtMs < 5000) return;  // каждые 5 секунд
+    if (dtMs < 5000) return;  // РєР°Р¶РґС‹Рµ 5 СЃРµРєСѓРЅРґ
     lastMs = now;
 
     uint32_t cryptoCycles = enc_cyc + dec_cyc;
@@ -273,7 +276,7 @@ void printPerf()
     if (enc_cnt) {
         float avg_us = cyc2us(enc_cyc) / enc_cnt;
         float tot_us = cyc2us(enc_cyc);
-        Serial.printf("enc : %.2f µs/blk  |  %.2f µs total  (%u blks)\n",
+        Serial.printf("enc : %.2f Вµs/blk  |  %.2f Вµs total  (%u blks)\n",
                       avg_us, tot_us, enc_cnt);
         any = true;
     }
@@ -281,7 +284,7 @@ void printPerf()
     if (dec_cnt) {
         float avg_us = cyc2us(dec_cyc) / dec_cnt;
         float tot_us = cyc2us(dec_cyc);
-        Serial.printf("dec : %.2f µs/blk  |  %.2f µs total  (%u blks)\n",
+        Serial.printf("dec : %.2f Вµs/blk  |  %.2f Вµs total  (%u blks)\n",
                       avg_us, tot_us, dec_cnt);
         any = true;
     }
@@ -305,7 +308,7 @@ void printPerf()
         test_vectors();
     }
 
-    /* Сбрасываем счётчики */
+    /* РЎР±СЂР°СЃС‹РІР°РµРј СЃС‡С‘С‚С‡РёРєРё */
     enc_cyc = enc_cnt = 0;
     dec_cyc = dec_cnt = 0;
     enc_pkt_cyc = enc_pkt_cnt = 0;
@@ -326,7 +329,7 @@ void setup() {
 
     simon_key_schedule_64_96(KEY96);
     Serial.printf("CPU %d MHz  |  SIMON 64/96 key schedule ready\n", ESP.getCpuFreqMHz());
-    // Печатаем первые несколько round keys для проверки
+    // РџРµС‡Р°С‚Р°РµРј РїРµСЂРІС‹Рµ РЅРµСЃРєРѕР»СЊРєРѕ round keys РґР»СЏ РїСЂРѕРІРµСЂРєРё
     Serial.print("First round keys: ");
     for(int i = 0; i < 6; i++) {
         Serial.printf("RK[%d]=0x%08X ", i, RK[i]);

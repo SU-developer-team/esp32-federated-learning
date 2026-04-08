@@ -1,3 +1,10 @@
+/*******************************************************
+ * Purpose: measure RAM usage of the PRESENT
+ * implementation on the ESP32 platform.
+ *
+ * This firmware is used for runtime memory benchmarking
+ * of the cipher implementation.
+ *******************************************************/
 #include <Arduino.h>
 #include <cstdint>
 
@@ -19,43 +26,43 @@ static const uint8_t SBOX_INV[16] = {
 
 uint64_t round_keys[32];
 
-/* Генерация раундовых ключей (80 бит) */
+/* Р“РµРЅРµСЂР°С†РёСЏ СЂР°СѓРЅРґРѕРІС‹С… РєР»СЋС‡РµР№ (80 Р±РёС‚) */
 void present80_key_schedule(const uint8_t *key) {
-    // Загружаем 80-битный ключ: key[0..9] (10 байт)
+    // Р—Р°РіСЂСѓР¶Р°РµРј 80-Р±РёС‚РЅС‹Р№ РєР»СЋС‡: key[0..9] (10 Р±Р°Р№С‚)
     uint64_t k_hi = 0;
     uint16_t k_lo = 0;
     
-    // k_hi содержит биты [79:16]
+    // k_hi СЃРѕРґРµСЂР¶РёС‚ Р±РёС‚С‹ [79:16]
     for (int i = 0; i < 8; i++) {
         k_hi = (k_hi << 8) | key[i];
     }
-    // k_lo содержит биты [15:0]
+    // k_lo СЃРѕРґРµСЂР¶РёС‚ Р±РёС‚С‹ [15:0]
     k_lo = ((uint16_t)key[8] << 8) | key[9];
     
     for (int i = 0; i < 32; i++) {
-        // Извлекаем раундовый ключ (биты [79:16])
+        // РР·РІР»РµРєР°РµРј СЂР°СѓРЅРґРѕРІС‹Р№ РєР»СЋС‡ (Р±РёС‚С‹ [79:16])
         round_keys[i] = k_hi;
         
-        // 1. Циклический сдвиг влево на 61 бит (эквивалентно сдвигу вправо на 19)
-        // Для 80-битного регистра: [k_hi(64 bits) | k_lo(16 bits)]
+        // 1. Р¦РёРєР»РёС‡РµСЃРєРёР№ СЃРґРІРёРі РІР»РµРІРѕ РЅР° 61 Р±РёС‚ (СЌРєРІРёРІР°Р»РµРЅС‚РЅРѕ СЃРґРІРёРіСѓ РІРїСЂР°РІРѕ РЅР° 19)
+        // Р”Р»СЏ 80-Р±РёС‚РЅРѕРіРѕ СЂРµРіРёСЃС‚СЂР°: [k_hi(64 bits) | k_lo(16 bits)]
         uint64_t temp_hi = k_hi;
         uint16_t temp_lo = k_lo;
         
         k_hi = (temp_hi >> 19) | ((uint64_t)temp_lo << 45) | ((uint64_t)(temp_hi & 0x07) << 61);
         k_lo = (uint16_t)(temp_hi >> 3) & 0xFFFF;
         
-        // 2. S-box на старшие 4 бита (биты [79:76])
+        // 2. S-box РЅР° СЃС‚Р°СЂС€РёРµ 4 Р±РёС‚Р° (Р±РёС‚С‹ [79:76])
         uint8_t s = (k_hi >> 60) & 0xF;
         k_hi = (k_hi & 0x0FFFFFFFFFFFFFFFULL) | ((uint64_t)SBOX[s] << 60);
         
-        // 3. XOR раундового номера в биты [19:15] 80-битного ключа
+        // 3. XOR СЂР°СѓРЅРґРѕРІРѕРіРѕ РЅРѕРјРµСЂР° РІ Р±РёС‚С‹ [19:15] 80-Р±РёС‚РЅРѕРіРѕ РєР»СЋС‡Р°
         uint8_t counter = (i + 1) & 0x1F;
         k_hi ^= ((uint64_t)(counter >> 1) & 0x0F);
         k_lo ^= (uint16_t)((counter & 0x01) << 15);
     }
 }
 
-/* Перестановка битов */
+/* РџРµСЂРµСЃС‚Р°РЅРѕРІРєР° Р±РёС‚РѕРІ */
 uint64_t present_pbox(uint64_t s) {
     uint64_t t = 0;
     for (int i = 0; i < 64; i++) {
@@ -66,7 +73,7 @@ uint64_t present_pbox(uint64_t s) {
     return t;
 }
 
-/* Шифрование блока */
+/* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР° */
 IRAM_ATTR uint64_t present80_encrypt(uint64_t block) {
     uint64_t state = block;
     
@@ -74,17 +81,17 @@ IRAM_ATTR uint64_t present80_encrypt(uint64_t block) {
         // AddRoundKey
         state ^= round_keys[i];
         
-        // S-box слой
+        // S-box СЃР»РѕР№
         uint64_t tmp = 0;
         for (int n = 0; n < 16; n++) {
             tmp |= (uint64_t)SBOX[(state >> (n * 4)) & 0xF] << (n * 4);
         }
         
-        // P-box слой
+        // P-box СЃР»РѕР№
         state = present_pbox(tmp);
     }
     
-    // Последний AddRoundKey (31-й раунд)
+    // РџРѕСЃР»РµРґРЅРёР№ AddRoundKey (31-Р№ СЂР°СѓРЅРґ)
     state ^= round_keys[31];
     
     return state;
@@ -94,7 +101,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     
-    // Ключ: 00000000000000000000 (80 бит = 10 байт)
+    // РљР»СЋС‡: 00000000000000000000 (80 Р±РёС‚ = 10 Р±Р°Р№С‚)
     uint8_t key[10] = {0x00, 0x00, 0x00, 0x00, 0x00, 
                        0x00, 0x00, 0x00, 0x00, 0x00};
     present80_key_schedule(key);
@@ -103,5 +110,5 @@ void setup() {
 }
 
 void loop() {
-    // Пустой цикл
+    // РџСѓСЃС‚РѕР№ С†РёРєР»
 }

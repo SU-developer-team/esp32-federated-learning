@@ -1,3 +1,10 @@
+/*******************************************************
+ * Purpose: test repeated or manual ECDH authentication
+ * attempts between the ESP32 device and the server.
+ *
+ * This firmware is used to debug reconnect, rekey, and
+ * authentication behavior over Wi-Fi and TCP.
+ *******************************************************/
 #include <Arduino.h>
 #include <WiFi.h>
 

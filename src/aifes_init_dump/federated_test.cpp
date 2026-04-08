@@ -1,11 +1,14 @@
 /*******************************************************
- * aifes_init_dump_test.ino
- * Purpose: dump initial weights from AIfES (ESP32)
+ * Purpose: build the AIfES model and dump its initial
+ * randomly initialized weights from the ESP32 device.
+ *
+ * This firmware is used to inspect the initial parameter
+ * layout before any training takes place.
  *******************************************************/
 #include <Arduino.h>
 #include <aifes.h>
 
-#include "federated_train_device_4/dataset_embedded.h"   // DS_F, DS_K
+#include "federated_train_centr/dataset_embedded.h"   // DS_F, DS_K
 
 static const uint32_t SERIAL_BAUD = 115200;
 
