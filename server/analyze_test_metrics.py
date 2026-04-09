@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
-# ------------------- SETTINGS -------------------
+# Analysis input configuration.
 date = 'server_logs/2026-02-23'
 group = 'group_1'
 base_path = os.path.join(date, group, 'devices')

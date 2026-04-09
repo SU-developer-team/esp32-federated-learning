@@ -405,10 +405,8 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
     uint16_t out_shape[2] = {1, DS_K};
     aitensor_t out_tensor = AITENSOR_2D_F32(out_shape, outK);
 
-    // Р РµР·РµСЂРІРёСЂСѓРµРј РїР°РјСЏС‚СЊ Р·Р°СЂР°РЅРµРµ (РїСЂРёРјРµСЂРЅРѕ 200 Р±Р°Р№С‚ РЅР° СЃС‚СЂРѕРєСѓ Г— N + Р·Р°РіРѕР»РѕРІРѕРє)
     test_csv.reserve(200 * (size_t)N + 512);
 
-    // Р—Р°РіРѕР»РѕРІРѕРє
     test_csv = "Sample,True_Label,Predicted_Label,Correct";
     for (uint8_t k = 0; k < DS_K; k++) {
         test_csv += ",Prob";
@@ -418,7 +416,7 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
 
     uint32_t correct = 0;
 
-    char line_buf[1024];  // РЈРІРµР»РёС‡РёР»Рё РґРѕ 1024 вЂ” РґРѕР»Р¶РЅРѕ С…РІР°С‚РёС‚СЊ РґР°Р¶Рµ РґР»СЏ DS_K=32
+    char line_buf[1024];
 
     for (uint16_t i = 0; i < N; i++) {
         for (uint16_t j = 0; j < DS_F; j++) x1[j] = X[i][j];
@@ -427,7 +425,6 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
         bool is_correct = (pred == Y[i]);
         if (is_correct) correct++;
 
-        // Р¤РѕСЂРјРёСЂСѓРµРј СЃС‚СЂРѕРєСѓ Р±РµР·РѕРїР°СЃРЅРѕ
         int len = snprintf(line_buf, sizeof(line_buf),
                            "%u,%u,%u,%s",
                            (unsigned)i, (unsigned)Y[i], (unsigned)pred,
@@ -450,7 +447,6 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
             ptr += prob_len;
         }
 
-        // Р”РѕР±Р°РІР»СЏРµРј \n
         if (ptr - line_buf + 2 <= (int)sizeof(line_buf)) {
             *ptr++ = '\n';
             *ptr = '\0';
@@ -463,7 +459,6 @@ static float eval_test_plain(const float (*X)[DS_F], const uint8_t* Y, uint16_t 
 
     float acc = 100.0f * (float)correct / (float)N;
 
-    // Р”РѕР±Р°РІР»СЏРµРј РёС‚РѕРіРѕРІСѓСЋ accuracy
     char acc_line[128];
     snprintf(acc_line, sizeof(acc_line), "\n# Overall Test Accuracy: %.2f\n", (double)acc);
     test_csv += acc_line;
@@ -887,7 +882,7 @@ static void rx_pump() {
 
 /* ------------------- Perf print ------------------- */
 static void printPerf() {
-    heap_caps_check_integrity_all(true);  // РџСЂРѕРІРµСЂРєР° РЅР° РїРѕРІСЂРµР¶РґРµРЅРёРµ heap (РґР»СЏ РґРµР±Р°РіР°)
+    heap_caps_check_integrity_all(true);
     
     static uint32_t lastMs = 0;
     uint32_t now = millis();
@@ -998,7 +993,6 @@ static void training_task(void* pv) {
     Serial.printf("TEST CSV size=%u bytes\n", (unsigned)test_csv.length());
     log_mem_snapshot("after_test_eval");
 
-    // Р’С‹РІРѕРґ РїРµСЂРІС‹С… 10 СЃС‚СЂРѕРє test_csv РІ С‚РµСЂРјРёРЅР°Р»
     Serial.println("\nFirst 10 rows of test_csv:");
     int line_count = 0;
     int pos = 0;
@@ -1026,7 +1020,6 @@ static void training_task(void* pv) {
         Serial.println();
     }
 
-    // РћР±СЉРµРґРёРЅСЏРµРј metrics_log Рё test_csv РґР»СЏ РѕС‚РїСЂР°РІРєРё
     g_metrics_pending = metrics_log + "\n# Test Results\n" + test_csv;
     Serial.printf("METRICS pending assembled: metrics_log=%u test_csv=%u combined=%u bytes\n",
                   (unsigned)metrics_log.length(),

@@ -10,25 +10,23 @@ match exactly or diverge after aggregation or training.
 import re
 import numpy as np
 
-# ============================================================
-# НАСТРОЙКИ — УКАЖИ ТУТ СВОИ ФАЙЛЫ
-# ============================================================
+# Input files to compare.
 PY_WEIGHTS_PATH  = "/home/admin/saved_weights/weights_000a000300012f02_epoch_1.txt"
 ESP_WEIGHTS_PATH = "/home/admin/saved_weights/weights_0000ecf4a1453ab4_epoch_1.txt"
 
-# Размеры сети (ДОЛЖНЫ совпадать с ESP и Python моделью)
+# Network dimensions. These must match both the ESP model and the Python model.
 F=39; H1=64; H2=64; H3=32; K=16
 
 EXPECTED_FLOATS = (H1*F + H1) + (H2*H1 + H2) + (H3*H2 + H3) + (K*H3 + K)  # = 2332
-
-# ============================================================
 
 W_RE = re.compile(r"w\[(\d+)\]\s*=\s*([+-]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:[eE][+-]?\d+)?)")
 
 def read_weights_txt(path: str) -> np.ndarray:
     """
-    Reads lines like: w[123]=0.123
-    Returns float32 array with size = max_index+1, missing indices => error
+    Read lines such as `w[123]=0.123`.
+
+    Returns a float32 array of size `max_index + 1`.
+    Missing indices are treated as an error.
     """
     idx_to_val = {}
     max_i = -1

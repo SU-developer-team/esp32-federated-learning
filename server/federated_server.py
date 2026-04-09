@@ -1,34 +1,19 @@
 #!/usr/bin/env python3
 """
-Purpose: run the secure federated learning server that receives
-encrypted client updates, aggregates weights, and stores logs.
+Purpose: run the federated training server for the ESP32 clients.
 
-This script is the main backend for the ESP32 federated training
-experiment and manages round coordination, parsing, and outputs.
+This script accepts authenticated encrypted client updates, decrypts and
+parses incoming payloads, aggregates model weights, sends aggregated
+weights back to connected devices, and stores human-readable logs,
+metrics, and metadata on disk.
+
+Main responsibilities:
+- handle authenticated ECDH-based sessions and rekeying
+- receive encrypted AIF1 and AIF2 payloads from devices
+- aggregate weights across participating devices
+- save per-round plaintext, metrics, weights, and JSON metadata
+- keep lightweight SQLite state for sessions and events
 """
-
-# ---------------------------------------------------------
-# secure_federated_server.py (HUMAN-READABLE LOGS ONLY)
-#
-# ✅ ВАЖНО: bin НЕ создаём вообще
-# - RX/TX plaintext (после расшифровки) -> .txt
-# - RX/TX веса (float32) -> .csv (idx,weight)
-# - Метрики -> .csv
-# - meta -> .json (как было)
-#
-# LOG STRUCTURE:
-# server_logs/YYYY-MM-DD/<GROUP_ID>/devices/<device_id>/round_<NNN>/
-#   session.log
-#   rx/...
-#   tx/...
-#
-# Staging:
-# server_logs/YYYY-MM-DD/_staging/agg_<agg_round_id>/devices/<device_id>/
-#
-# Metrics:
-# если пришли до AIF1 -> server_logs/YYYY-MM-DD/_metrics_orphans/devices/<device_id>/
-# потом переносятся в нужный round_XXX
-# ---------------------------------------------------------
 
 from __future__ import annotations
 
@@ -71,14 +56,14 @@ NORMAL_TIMEOUT_S   = 2.0
 AGG_MIN_UPDATES = 1
 AGG_TIMEOUT_S = 1000000000000
 
-# ✅ ждём ровно столько устройств
+# Wait for exactly this number of devices before finalizing a round.
 AGG_EXACT_DEVICES = 1
 
-# ✅ ограничение количества агрегированных раундов
+# Optional hard limit for aggregated rounds.
 MAX_AGG_ROUNDS = None
 
-# (опционально) лимит round_XXX внутри одной группы участников
-MAX_GROUP_ROUNDS = None  # например 10
+# Optional limit for round_XXX within a single participant group.
+MAX_GROUP_ROUNDS = None  # for example: 10
 
 # ---------------- Storage (SQLite) ----------------
 DB_PATH = "sessions.db"
@@ -406,7 +391,7 @@ def log_stat(*, addr: str, device_id_hex: str, epoch: int, session_id_hex: str |
     if meta:
         print(f"  meta: {meta}")
     if warn:
-        print(f"  ⚠️ {warn}")
+        print(f"  WARN: {warn}")
 
 # -------------------------------------------------
 # Handshake
@@ -530,7 +515,7 @@ def speck_decrypt_u64(ct_num: int, RK):
         x = rol32(((x ^ k) - y) & MASK32, 8)
     return ((x << 32) | y) & 0xFFFFFFFFFFFFFFFF
 
-# ✅ FIX: единый порядок байт с ESP32 (big-endian блоки 8 байт)
+# Keep the same byte order as the ESP32 client: big-endian 8-byte blocks.
 def speck_decrypt_bytes(ciphertext: bytes, RK) -> bytes:
     if len(ciphertext) % 8 != 0:
         raise ValueError("Ciphertext length must be multiple of 8")
@@ -545,7 +530,7 @@ def speck_encrypt_bytes(plaintext: bytes, RK) -> bytes:
     out = bytearray()
     for i in range(0, len(plaintext), 8):
         chunk = plaintext[i:i+8]
-        chunk = chunk.ljust(8, b"\x00")  # padding нулями
+        chunk = chunk.ljust(8, b"\x00")  # Zero padding to a full 8-byte block.
         plain_num = int.from_bytes(chunk, byteorder="big", signed=False)
         ct_num = speck_encrypt_u64(plain_num, RK)
         out += ct_num.to_bytes(8, byteorder="big", signed=False)
@@ -903,7 +888,7 @@ def process_payload(ciphertext_bytes: bytes, RK,
                 metrics_str = metrics_bytes.decode("utf-8", errors="ignore")
                 if not metrics_str.startswith(METRICS_HEADER):
                     print("Warning: bad metrics header in AIF2")
-                # Разделяем на train и test
+                # Split the combined metrics payload into train and test sections.
                 parts = metrics_str.split("\n# Test Results\n", 1)
                 train_metrics_text = parts[0].strip()
                 test_metrics_text = parts[1].strip() if len(parts) > 1 else None
@@ -1259,11 +1244,11 @@ def main():
     server.bind((HOST, PORT))
     server.listen(50)
 
-    print(f"🚀 Unified server on {HOST}:{PORT} (DB: {DB_PATH})")
-    print(f"📝 File logs: {LOG_ROOT.resolve()}")
-    print("✅ Logging mode: NO BIN, only TXT/CSV/JSON")
-    print(f"✅ MAX_AGG_ROUNDS={MAX_AGG_ROUNDS}")
-    print(f"✅ MAX_GROUP_ROUNDS={MAX_GROUP_ROUNDS}")
+    print(f"Server listening on {HOST}:{PORT} (DB: {DB_PATH})")
+    print(f"File logs: {LOG_ROOT.resolve()}")
+    print("Logging mode: TXT/CSV/JSON only, no binary dumps")
+    print(f"MAX_AGG_ROUNDS={MAX_AGG_ROUNDS}")
+    print(f"MAX_GROUP_ROUNDS={MAX_GROUP_ROUNDS}")
 
     while True:
         conn, addr = server.accept()
