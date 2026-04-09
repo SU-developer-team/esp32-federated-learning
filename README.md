@@ -1,6 +1,6 @@
 # ESP32 Federated Learning Experiments
 
-This repository contains ESP32-S3 firmware and Python-side tooling for federated learning experiments, secure weight transfer over Wi-Fi, and lightweight crypto benchmarking.
+This repository contains ESP32-S3 firmware and Python-side tooling for federated learning experiments and lightweight crypto benchmarking.
 
 The project combines:
 - ESP32-S3 client firmware for local training and weight upload
@@ -17,9 +17,8 @@ The project combines:
 - [esp32-s3-devkitc-1-n16r8v.json](/d:/esp32_federated/esp32-s3-devkitc-1-n16r8v.json) is the board manifest that should be used for this project.
 - [src](/d:/esp32_federated/src) contains all firmware sources.
 - [lib/auth_ecdh](/d:/esp32_federated/lib/auth_ecdh) contains the local authentication library.
-- [server](/d:/esp32_federated/server) contains the Python server code, metric analysis scripts, and related utilities.
+- [server](/d:/esp32_federated/server) contains the Python federated server and related local artifacts.
 - [labview](/d:/esp32_federated/labview) contains the LabVIEW project file used to measure power and energy consumption during the experiments.
-- [server/graph](/d:/esp32_federated/server/graph) stores generated experiment graphs, including power and energy plots.
 
 ### Firmware in `src`
 - [federated_train_device_1](/d:/esp32_federated/src/federated_train_device_1), [federated_train_device_2](/d:/esp32_federated/src/federated_train_device_2), and [federated_train_device_3](/d:/esp32_federated/src/federated_train_device_3) are federated learning firmware variants for different devices.
@@ -44,20 +43,14 @@ This library is part of the repository and should stay tracked by Git.
 
 ## Python Server Folder
 
-The [server](/d:/esp32_federated/server) folder contains the Python-side server code and analysis tools.
+The [server](/d:/esp32_federated/server) folder currently contains the main Python federated server and a small set of local text artifacts.
 
 Important files:
-- [secure_federated_server.py](/d:/esp32_federated/server/secure_federated_server.py) is the main secure TCP server for federated weight exchange.
-- [speck_tcp_server.py](/d:/esp32_federated/server/speck_tcp_server.py) is a simpler TCP server variant.
-- [analyze_test_metrics.py](/d:/esp32_federated/server/analyze_test_metrics.py) analyzes test metrics and builds confusion matrices and accuracy plots.
-- [compare_saved_weights.py](/d:/esp32_federated/server/saved_weights/compare_saved_weights.py) compares saved weight dumps.
-- [requirements.txt](/d:/esp32_federated/server/requirements.txt) lists Python dependencies for the server-side scripts.
+- [federated_server.py](/d:/esp32_federated/server/federated_server.py) is the main TCP server for authenticated federated weight exchange, aggregation, and log storage.
+- [requirements.txt](/d:/esp32_federated/server/requirements.txt) lists the external Python dependencies required by the server.
+- [parsed_log.txt](/d:/esp32_federated/server/parsed_log.txt), [r.txt](/d:/esp32_federated/server/r.txt), and [stat.txt](/d:/esp32_federated/server/stat.txt) are local text artifacts.
 
-Experiment logs, exported metrics, and generated plots are stored in [server_logs](/d:/esp32_federated/server/server_logs).
-
-Additional saved measurement graphs, such as power, current, voltage, and cumulative energy plots, are stored in [graph](/d:/esp32_federated/server/graph).
-
-The `server/server_logs`, `server/saved_weights/*.txt`, and similar generated artifacts are local outputs and should not be committed.
+Generated outputs such as `server/server_logs`, plots, exported metrics, cached bytecode, and other local artifacts should not be committed.
 
 ## PlatformIO Environments
 
@@ -105,7 +98,7 @@ pio run -e bench_speed_speck -t upload
 - PSRAM is enabled in [platformio.ini](/d:/esp32_federated/platformio.ini).
 - Some firmware keeps Wi-Fi credentials, server IPs, and keys directly in source files.
 - The training firmware uses embedded datasets stored in header files.
-- The federated training flows depend on the Python server code in [server](/d:/esp32_federated/server).
+- The federated training flows depend on [federated_server.py](/d:/esp32_federated/server/federated_server.py).
 - The [labview/labview.vi](/d:/esp32_federated/labview/labview.vi) file is the measurement workflow used to capture energy and power consumption during the hardware experiments.
 - A repository scan found no files larger than `150 MB` at the moment.
 
