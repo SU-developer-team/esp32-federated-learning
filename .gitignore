@@ -29,3 +29,4 @@ server/stat.txt
 # Optional local virtual environments.
 .venv/
 venv/
+
